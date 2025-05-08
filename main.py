@@ -1,13 +1,11 @@
 import json
+import asyncio
 import os
-from planner_agent import plan_query
-from nl2sql_agent import generate_sql
-from critic_agent import critique_sql
 from schema_extractor import get_schema
+from agents import solve
 
-# Paths configuration
-DATA_FILE = os.getenv("BIRD_SQLITE_JSON", "data/mini_dev_sqlite.json")
-DB_DIR = os.getenv("BIRD_DATABASE_DIR", "data/databases")
+DATA_FILE = "data/mini_dev_sqlite.json"
+DB_DIR = "data/databases"
 OUTPUT_FILE = "predictions.json"
 RESULTS_DIR = "results"
 
@@ -16,6 +14,10 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 def load_dataset(json_path):
     with open(json_path, 'r', encoding='utf-8') as f:
         return json.load(f)
+
+def save_predictions(preds, out_path):
+    with open(out_path, 'w', encoding='utf-8') as f:
+        json.dump(preds, f, indent=2)
 
 def save_individual_result(idx, db_id, result_data):
     file_path = os.path.join(RESULTS_DIR, f"{idx}_{db_id}.json")
@@ -33,67 +35,52 @@ def append_to_predictions(output_line):
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(predictions, f, indent=2)
 
-def main():
-    data = load_dataset(DATA_FILE)
+async def process_all():
+    data = load_dataset(DATA_FILE)[148:]
     schema_cache = {}
-    total = len(data)
+    predictions = []
 
-    for idx, example in enumerate(data, start=1):
-        db_id = example.get("db_id")
-        question = example.get("question")
-        evidence = example.get("evidence", "") or ""
+    for idx, example in enumerate(data, start=148):
+        db_id = example["db_id"]
+        question = example["question"]
+        evidence = example.get("evidence", "")
 
-        if db_id in schema_cache:
-            schema = schema_cache[db_id]
-        else:
-            db_path = os.path.join(DB_DIR, f"{db_id}.sqlite")
-            schema = get_schema(db_path)
-            schema_cache[db_id] = schema
+        print(f"Processing {db_id}...")
+        print(idx,"index")
 
-        print(f"[{idx}/{total}] Processing question (DB: {db_id})...")
+        if db_id not in schema_cache:
+            try:
+                schema_cache[db_id] = get_schema(os.path.join(DB_DIR, db_id), encoding="utf-8-sig")
+            except Exception as e:
+                print("Exception occured: changed encoding to cp1252")
+                print(e)
+                schema_cache[db_id] = get_schema(os.path.join(DB_DIR, db_id), encoding="cp1252")
+            # schema_cache[db_id] = get_schema(os.path.join(DB_DIR, db_id))
+
+        schema = schema_cache[db_id]
+
+        print(f"[{idx}/{len(data)}] {db_id}: {question[:80]}")
 
         try:
-            plan = plan_query(question, evidence)
+            sql = await solve(question, schema, db_id, evidence)
         except Exception as e:
-            print(f"Planner agent failed: {e}")
-            plan = ""
+            print("ERROR:", e)
+            sql = "FAILED"
 
-        try:
-            sql_query = generate_sql(question, schema, plan, evidence)
-        except Exception as e:
-            print(f"NL2SQL agent failed: {e}")
-            sql_query = ""
+        # Final SQL cleaning
+        sql = sql.replace(f"{db_id}.", "").strip()
 
-        corrected_sql = ""
-        try:
-            critique = critique_sql(question, schema, sql_query, evidence)
-            if critique and critique.upper().strip() != "OK":
-                corrected_sql = critique
-        except Exception as e:
-            print(f"Critic agent failed: {e}")
-
-        final_sql = corrected_sql if corrected_sql else sql_query
-        final_sql = final_sql.replace(f"{db_id}.", "")
-
-        output_line = f"{final_sql}\t----- bird -----\t{db_id}"
-
-        # Save individual result
-        result_data = {
-            "idx": idx,
-            "db_id": db_id,
+        sql_entry = f"{sql}\t----- bird -----\t{db_id}"
+        save_individual_result(idx, db_id, {
             "question": question,
+            "schema": schema,
             "evidence": evidence,
-            "plan": plan,
-            "sql_query": sql_query,
-            "corrected_sql": corrected_sql,
-            "final_sql": final_sql
-        }
-        save_individual_result(idx, db_id, result_data)
-
-        # Append to predictions
-        append_to_predictions(output_line)
-
-    print("\nDone. Predictions saved to predictions.json and results/ folder")
+            "sql": sql_entry
+        })
+        predictions.append(sql_entry)
+        append_to_predictions(sql_entry)
+        # if idx == 2:
+        #     break
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(process_all())
