@@ -26,7 +26,7 @@ def get_schema(database_dir: str, encoding: str) -> str:
             with open(os.path.join(desc_dir, filename), newline='', encoding=encoding) as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    print(row)
+                    # print(row)
                     column_name = row.get("original_column_name") or ""
                     data_type = row.get("data_format", "").strip()
                     description = row.get("column_description", "").strip()
@@ -59,7 +59,7 @@ def get_schema(database_dir: str, encoding: str) -> str:
                 col_str += f": {col['description']}"
             col_lines.append(col_str)
         if col_lines:
-            schema_lines.append("Columns: " + ", ".join(col_lines))
+            schema_lines.append("Use only these Allowed Columns: " + ", ".join(col_lines))
         schema_lines.append("")
 
     return "\n".join(schema_lines).strip()
