@@ -3,11 +3,11 @@ import asyncio
 import os
 from schema_extractor import get_schema
 from agents import solve
-from schema_loader import load_schema
-from schema_index import SchemaRetriever
 
-DATA_FILE = "data/mini_dev_sqlite.json"
-DB_DIR = "data/databases"
+# Add your data paths here - after downloading the dataset
+DATA_DIR = "data"
+DATA_FILE = f"{DATA_DIR}/mini_dev_sqlite.json"
+DB_DIR = f"{DATA_DIR}/dev_databases"
 OUTPUT_FILE = "predictions.json"
 RESULTS_DIR = "results"
 
@@ -79,7 +79,7 @@ async def process_all():
         print(f"[{idx}/{len(data)}] {db_id}: {question[:80]}")
 
         try:
-            sql = solve(question, schema, db_id, evidence)
+            sql = solve(DB_DIR, DATA_DIR, question, schema, db_id, evidence)
         except Exception as e:
             print("ERROR:", e)
             raise e

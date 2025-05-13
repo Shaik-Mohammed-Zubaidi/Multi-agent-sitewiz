@@ -10,8 +10,6 @@ load_dotenv()
 
 # --- Config ---
 config_list_gemini = autogen.config_list_from_json("model_config.json")
-DB_DIR = "data/databases"
-FK_FILE = "data/dev_tables.json"
 MAX_RETRIES = 3
 
 # --- Agent Definitions ---
@@ -276,8 +274,8 @@ refiner = AssistantAgent(
 
 # --- Utility Functions ---
 
-def run_sql_safely(db_id: str, sql: str) -> tuple[bool, str, str]:
-    db_path = os.path.join(DB_DIR, db_id, f"{db_id}.sqlite")
+def run_sql_safely(db_dir: str,db_id: str, sql: str) -> tuple[bool, str, str]:
+    db_path = os.path.join(db_dir, db_id, f"{db_id}.sqlite")
     if not os.path.exists(db_path):
         return False, f"Database not found: {db_path}", "FileNotFoundError"
     try:
@@ -288,7 +286,8 @@ def run_sql_safely(db_id: str, sql: str) -> tuple[bool, str, str]:
     except Exception as e:
         return False, str(e), e.__class__.__name__
 
-def get_foreign_keys(db_id: str, fk_file_path: str = FK_FILE) -> str:
+def get_foreign_keys(db_id: str, data_dir: str) -> str:
+    fk_file_path = f"{data_dir}/dev_tables.json"
     try:
         with open(fk_file_path, "r", encoding="utf-8") as f:
             fk_data = json.load(f)
@@ -301,8 +300,8 @@ def get_foreign_keys(db_id: str, fk_file_path: str = FK_FILE) -> str:
 
 # --- Main solve() Function ---
 
-def solve(question: str, schema: str, db_id: str, evidence: str = "") -> str:
-    fk_str = get_foreign_keys(db_id)
+def solve(db_dir: str, data_dir: str, question: str, schema: str, db_id: str, evidence: str = "") -> str:
+    fk_str = get_foreign_keys(db_id, data_dir)
     full_prompt = f"Question: {question}\nDB_ID: {db_id}"
 
     if evidence:
@@ -349,7 +348,7 @@ def solve(question: str, schema: str, db_id: str, evidence: str = "") -> str:
     sql_only = re.sub(r"```sql\s*|\s*```", "", sql).strip()
 
     # Step 3: Initial Execution
-    success, sql_error, exception_class = run_sql_safely(db_id, sql_only)
+    success, sql_error, exception_class = run_sql_safely(db_dir, db_id, sql_only)
 
     # Step 4: Retry loop using Refiner if needed
     attempts = 0
@@ -383,7 +382,7 @@ def solve(question: str, schema: str, db_id: str, evidence: str = "") -> str:
         sql_only = re.sub(r"FINAL\s*", "", final)
         sql_only = re.sub(r"```sql\s*|\s*```", "", sql_only).strip()
 
-        success, sql_error, exception_class = run_sql_safely(db_id, sql_only)
+        success, sql_error, exception_class = run_sql_safely(db_dir, db_id, sql_only)
         # print(f"After refiner SQL at attempt {attempts}:", sql_only)
         attempts += 1
     # print("After refiner SQL:", sql_only)
