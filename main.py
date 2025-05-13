@@ -42,7 +42,7 @@ def append_to_predictions(output_line):
         json.dump(predictions, f, indent=2)
 
 async def process_all():
-    data = load_dataset(DATA_FILE)
+    data = load_dataset(DATA_FILE) #[465:]
     predictions = []
     table_names = {}
     retriever_cache = {}
