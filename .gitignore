@@ -1,0 +1,7 @@
+venv/
+bird_sql_mini/
+__pycache__/
+.env
+results/
+predictions.json
+data/
