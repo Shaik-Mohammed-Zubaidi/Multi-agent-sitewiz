@@ -1,6 +1,6 @@
 ---
 
-# 🧠 Multi-Agent NL2SQL System (Sitewiz Assessment)
+# 🧠 Multi-Agent NL2SQL System
 
 This project implements a multi-agent system for converting natural language questions into SQL queries, evaluated on the [BIRD-SQL Mini-Dev](https://github.com/bird-bench/mini_dev) benchmark. It uses **Gemini Flash 2.0** and includes automatic SQL validation + retry mechanisms inspired by the BIRD paper.
 
